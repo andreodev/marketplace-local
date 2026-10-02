@@ -17,14 +17,17 @@ export function ActionForm({
   action,
   fields,
   submitLabel,
+  hiddenFields,
 }: {
   action: (state: ActionState, data: FormData) => Promise<ActionState>;
   fields: FormField[];
   submitLabel: string;
+  hiddenFields?: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (
     <form action={formAction} className="space-y-5">
+      {Object.entries(hiddenFields ?? {}).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
       {fields.map(({ label, ...field }) => (
         <div key={field.name}>
           <label

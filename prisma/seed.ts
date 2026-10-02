@@ -12,6 +12,7 @@ const categories = [
   ["Esportes e lazer", "esportes-e-lazer"],
   ["Bebês e crianças", "bebes-e-criancas"],
   ["Ferramentas", "ferramentas"],
+  ["Contas digitais", "contas-digitais"],
   ["Outros", "outros"],
 ];
 async function main() {

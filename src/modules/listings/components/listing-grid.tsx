@@ -9,11 +9,12 @@ type Listing = {
   state: string;
   condition: string;
   images: { url: string }[];
+  featuredUntil?: Date | null;
 };
 
 export function ListingGrid({ listings }: { listings: Listing[] }) {
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+    <div className="flex flex-col gap-3">
       {listings.map((listing) => (
         <ListingCard
           key={listing.id}
@@ -21,6 +22,7 @@ export function ListingGrid({ listings }: { listings: Listing[] }) {
             ...listing,
             price: listing.price.toFixed(2),
             image: listing.images[0]?.url,
+            featured: !!listing.featuredUntil && listing.featuredUntil > new Date(),
           }}
         />
       ))}

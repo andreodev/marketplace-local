@@ -2,11 +2,12 @@ import "server-only";
 import { db } from "@/lib/db";
 import { Prisma, type ListingStatus } from "@/generated/prisma/client";
 import type { z } from "zod";
-import type { listingSchema } from "../schemas/listing";
+import { listingSchema } from "../schemas/listing";
 import { AppError } from "@/lib/errors";
 import { mediaUrl } from "../utils/media-policy";
+import { ACCOUNT_CATEGORY_SLUG, assertAccountListingContent, assertAccountListingReady } from "../utils/account-policy";
 
-type ListingData = z.output<typeof listingSchema>;
+type ListingData = z.input<typeof listingSchema>;
 const orderedImages = { orderBy: { position: "asc" as const } };
 const imageData = (keys: string[]) =>
   keys.map((storageKey, position) => ({
@@ -27,6 +28,8 @@ const publicListingSelect = {
   city: true,
   state: true,
   condition: true,
+  featuredUntil: true,
+  category: { select: { slug: true } },
   images: { ...orderedImages, take: 1, select: { url: true } },
 } as const;
 
@@ -66,7 +69,33 @@ function publicListingWhere(filters: PublicListingFilters = {}) {
   };
 }
 
+async function rankedPublicListings(where: Prisma.ListingWhereInput, take: number, skip = 0) {
+  const now = new Date();
+  const featuredWhere = { AND: [where, { featuredUntil: { gt: now } }] };
+  const regularWhere = { AND: [where, { OR: [{ featuredUntil: null }, { featuredUntil: { lte: now } }] }] };
+  const featuredCount = await db.listing.count({ where: featuredWhere });
+  const promoted = skip < featuredCount
+    ? await db.listing.findMany({ where: featuredWhere, orderBy: [{ featuredUntil: "desc" }, { createdAt: "desc" }, { id: "desc" }], skip, take, select: publicListingSelect })
+    : [];
+  const remaining = take - promoted.length;
+  if (!remaining) return promoted;
+  const regular = await db.listing.findMany({ where: regularWhere, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: Math.max(0, skip - featuredCount), take: remaining, select: publicListingSelect });
+  return [...promoted, ...regular];
+}
+
 export const listingRepository = {
+  findActiveCategory(id: string) {
+    return db.category.findFirst({
+      where: { id, active: true },
+      select: { id: true, slug: true },
+    });
+  },
+  findCategoryById(id: string) {
+    return db.category.findUnique({
+      where: { id },
+      select: { id: true, slug: true, active: true },
+    });
+  },
   listOwned(sellerId: string, skip = 0) {
     return db.listing.findMany({
       where: { sellerId, status: { not: "REMOVED" } },
@@ -87,10 +116,23 @@ export const listingRepository = {
   },
   listForAdmin() {
     return db.listing.findMany({
+      where: { status: { not: "PENDING_REVIEW" } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 50,
       include: {
         images: { ...orderedImages, take: 1 },
+        seller: { select: { id: true, name: true, status: true } },
+        category: { select: { name: true, slug: true } },
+        _count: { select: { reports: true } },
+      },
+    });
+  },
+  listPendingAccountReviews() {
+    return db.listing.findMany({
+      where: { status: "PENDING_REVIEW", category: { slug: ACCOUNT_CATEGORY_SLUG } },
+      orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+      take: 50,
+      include: {
         seller: { select: { id: true, name: true, status: true } },
         category: { select: { name: true } },
         _count: { select: { reports: true } },
@@ -103,13 +145,32 @@ export const listingRepository = {
       include: {
         images: orderedImages,
         seller: { select: { id: true, name: true, email: true, status: true } },
-        category: { select: { id: true, name: true, active: true } },
+        category: { select: { id: true, name: true, slug: true, active: true } },
         _count: { select: { reports: true, favorites: true, contacts: true } },
       },
     });
   },
   removeAsAdmin(id: string) {
     return db.listing.update({ where: { id }, data: { status: "REMOVED" } });
+  },
+  async reviewAccountListing(id: string, updatedAt: Date, approved: boolean, note: string) {
+    const result = await db.listing.updateMany({
+      where: {
+        id,
+        updatedAt,
+        status: "PENDING_REVIEW",
+        category: approved
+          ? { slug: ACCOUNT_CATEGORY_SLUG, active: true }
+          : { slug: ACCOUNT_CATEGORY_SLUG },
+        ...(approved ? { seller: { status: "ACTIVE" as const } } : {}),
+      },
+      data: {
+        status: approved ? "ACTIVE" : "DRAFT",
+        moderationNote: approved ? null : note,
+      },
+    });
+    if (result.count !== 1)
+      throw new AppError("O anúncio foi alterado ou não está mais aguardando revisão.");
   },
   async save(
     sellerId: string,
@@ -118,19 +179,40 @@ export const listingRepository = {
     slug: string,
     existing?: { id: string; updatedAt: Date },
   ) {
+    const parsed = listingSchema.parse(data);
     return db.$transaction(async (tx) => {
       const seller = await tx.user.findFirst({
         where: { id: sellerId, status: "ACTIVE" },
         select: { id: true },
       });
       const category = await tx.category.findFirst({
-        where: { id: data.categoryId, active: true },
-        select: { id: true },
+        where: { id: parsed.categoryId, active: true },
+        select: { id: true, slug: true },
       });
       if (!seller || !category)
         throw new AppError("Usuário ou categoria indisponível.");
-      const { images, price, ...fields } = data;
-      const values = { ...fields, price: new Prisma.Decimal(price), status };
+      const { images, price, ...fields } = parsed;
+      const isAccount = category.slug === ACCOUNT_CATEGORY_SLUG;
+      if (["ACTIVE", "PENDING_REVIEW"].includes(status) && images.length === 0)
+        throw new AppError("Adicione pelo menos uma foto para publicar.");
+      if (isAccount) {
+        assertAccountListingContent(fields);
+        if (status === "ACTIVE")
+          throw new AppError("Contas digitais precisam passar por revisão.");
+        if (status === "PENDING_REVIEW") assertAccountListingReady(fields);
+      } else if (status === "PENDING_REVIEW") {
+        throw new AppError("A revisão de contas exige a categoria Contas digitais.");
+      }
+      const values = {
+        ...fields,
+        price: new Prisma.Decimal(price),
+        status,
+        accountPlatform: isAccount ? fields.accountPlatform || null : null,
+        accountType: isAccount ? fields.accountType || null : null,
+        accountPolicyUrl: isAccount ? fields.accountPolicyUrl || null : null,
+        accountTransferConfirmed: isAccount && fields.accountTransferConfirmed,
+        moderationNote: null,
+      };
       if (!existing)
         return tx.listing.create({
           data: {
@@ -146,7 +228,7 @@ export const listingRepository = {
           sellerId,
           seller: { status: "ACTIVE" },
           updatedAt: existing.updatedAt,
-          status: { in: ["DRAFT", "ACTIVE", "PAUSED"] },
+          status: { in: ["DRAFT", "PENDING_REVIEW", "ACTIVE", "PAUSED"] },
         },
         data: values,
       });
@@ -179,8 +261,10 @@ export const listingRepository = {
         status: from,
         updatedAt,
         ...(to === "ACTIVE"
-          ? { category: { active: true }, images: { some: {} } }
-          : {}),
+          ? { category: { active: true, slug: { not: ACCOUNT_CATEGORY_SLUG } }, images: { some: {} } }
+          : to === "PENDING_REVIEW"
+            ? { category: { active: true, slug: ACCOUNT_CATEGORY_SLUG }, images: { some: {} } }
+            : {}),
       },
       data: { status: to },
     });
@@ -190,28 +274,24 @@ export const listingRepository = {
       );
   },
   recent() {
-    return db.listing.findMany({
-      where: publicWhere,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: 12,
-      select: publicListingSelect,
-    });
+    return rankedPublicListings(publicWhere, 12);
+  },
+  featuredByCategory(categoryIds: string[]) {
+    return Promise.all(
+      categoryIds.map((categoryId) =>
+        rankedPublicListings({ ...publicWhere, categoryId }, 4),
+      ),
+    );
   },
   searchPublic(filters: PublicListingFilters, skip = 0) {
-    return db.listing.findMany({
-      where: publicListingWhere(filters),
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: 24,
-      skip,
-      select: publicListingSelect,
-    });
+    return rankedPublicListings(publicListingWhere(filters), 24, skip);
   },
   findPublic(slug: string) {
     return db.listing.findFirst({
       where: { ...publicWhere, slug },
       include: {
         images: orderedImages,
-        category: { select: { name: true } },
+        category: { select: { name: true, slug: true } },
         seller: { select: { id: true, name: true, createdAt: true } },
       },
     });

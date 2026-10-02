@@ -28,10 +28,9 @@ export default function Register() {
           },
           {
             name: "whatsapp",
-            label: "WhatsApp com DDD",
+            label: "WhatsApp com DDD (opcional)",
             type: "tel",
             autoComplete: "tel",
-            required: true,
           },
           {
             name: "password",

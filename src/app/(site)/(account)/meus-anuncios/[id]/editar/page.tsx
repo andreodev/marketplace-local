@@ -16,7 +16,7 @@ export default async function EditListing({
     findMyListing(id),
     listCategories(),
   ]);
-  if (!listing || !["DRAFT", "ACTIVE", "PAUSED"].includes(listing.status))
+  if (!listing || !["DRAFT", "PENDING_REVIEW", "ACTIVE", "PAUSED"].includes(listing.status))
     notFound();
   return (
     <section className="mx-auto max-w-3xl">
@@ -38,6 +38,10 @@ export default async function EditListing({
           city: listing.city,
           state: listing.state,
           neighborhood: listing.neighborhood,
+          accountPlatform: listing.accountPlatform,
+          accountType: listing.accountType,
+          accountPolicyUrl: listing.accountPolicyUrl,
+          accountTransferConfirmed: listing.accountTransferConfirmed,
           images: listing.images.flatMap((image) =>
             image.storageKey ? [image.storageKey] : [],
           ),

@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   requireUser,
-  getCurrentUser,
 } from "@/modules/auth/services/session-service";
 import { AppError } from "@/lib/errors";
 import { mediaExists } from "@/lib/media-storage";
@@ -18,15 +17,27 @@ import {
   assertStatusTransition,
 } from "../utils/listing-policy";
 import { assertMediaKey } from "../utils/media-policy";
+import {
+  ACCOUNT_CATEGORY_SLUG,
+  assertAccountListingContent,
+  assertAccountListingReady,
+} from "../utils/account-policy";
 
 export async function saveListing(input: unknown) {
   const user = await requireUser();
   const { id, updatedAt, intent, ...data } = saveListingSchema.parse(input);
+  const category = await listingRepository.findActiveCategory(data.categoryId);
+  if (!category) throw new AppError("Categoria indisponível.");
+  const isAccount = category.slug === ACCOUNT_CATEGORY_SLUG;
+  if (isAccount) {
+    assertAccountListingContent(data);
+    if (intent !== "DRAFT") assertAccountListingReady(data);
+  }
   const existing = id ? await listingRepository.findOwned(id, user.id) : null;
   if (id && !existing) throw new AppError("Anúncio não encontrado.");
   if (existing) {
     assertListingOwner(existing, user.id);
-    if (!["DRAFT", "ACTIVE", "PAUSED"].includes(existing.status))
+    if (!["DRAFT", "PENDING_REVIEW", "ACTIVE", "PAUSED"].includes(existing.status))
       throw new AppError("Este anúncio não pode mais ser editado.");
     if (!updatedAt || existing.updatedAt.toISOString() !== updatedAt)
       throw new AppError("O anúncio foi alterado. Recarregue a página.");
@@ -34,8 +45,11 @@ export async function saveListing(input: unknown) {
       throw new AppError("Um anúncio publicado não pode voltar a rascunho.");
   } else if (intent === "SAVE")
     throw new AppError("Escolha salvar rascunho ou publicar.");
-  const status = intent === "SAVE" ? existing!.status : intent;
-  if (status === "ACTIVE" && data.images.length === 0)
+  const requestedStatus = intent === "SAVE" ? existing!.status : intent;
+  const status = isAccount
+    ? intent === "DRAFT" ? "DRAFT" : "PENDING_REVIEW"
+    : requestedStatus === "PENDING_REVIEW" ? "DRAFT" : requestedStatus;
+  if (["ACTIVE", "PENDING_REVIEW"].includes(status) && data.images.length === 0)
     throw new AppError("Adicione pelo menos uma foto para publicar.");
   if (existing && existing.status !== status)
     assertStatusTransition(existing.status, status);
@@ -69,10 +83,17 @@ export async function changeListingStatus(input: unknown) {
   const listing = await listingRepository.findOwned(data.id, user.id);
   if (!listing) throw new AppError("Anúncio não encontrado.");
   assertListingOwner(listing, user.id);
-  assertStatusTransition(listing.status, data.status);
+  const category = await listingRepository.findCategoryById(listing.categoryId);
+  if (!category) throw new AppError("Categoria indisponível.");
+  const status = data.status === "ACTIVE" && category.slug === ACCOUNT_CATEGORY_SLUG
+    ? "PENDING_REVIEW"
+    : data.status;
+  if ((status === "ACTIVE" || status === "PENDING_REVIEW") && !category.active)
+    throw new AppError("Categoria indisponível.");
+  assertStatusTransition(listing.status, status);
   if (listing.updatedAt.toISOString() !== data.updatedAt)
     throw new AppError("O anúncio foi alterado. Recarregue a página.");
-  if (data.status === "ACTIVE") {
+  if (status === "ACTIVE" || status === "PENDING_REVIEW") {
     if (listing.images.length === 0)
       throw new AppError("Adicione pelo menos uma foto para publicar.");
     listingSchema.parse({
@@ -84,8 +105,22 @@ export async function changeListingStatus(input: unknown) {
       city: listing.city,
       state: listing.state,
       neighborhood: listing.neighborhood,
+      accountPlatform: listing.accountPlatform ?? "",
+      accountType: listing.accountType ?? "",
+      accountPolicyUrl: listing.accountPolicyUrl ?? "",
+      accountTransferConfirmed: listing.accountTransferConfirmed,
       images: listing.images.map((image) => image.storageKey),
     });
+    if (status === "PENDING_REVIEW") {
+      assertAccountListingReady({
+        title: listing.title,
+        description: listing.description,
+        accountPlatform: listing.accountPlatform ?? "",
+        accountType: listing.accountType ?? "",
+        accountPolicyUrl: listing.accountPolicyUrl ?? "",
+        accountTransferConfirmed: listing.accountTransferConfirmed,
+      });
+    }
     for (const image of listing.images) {
       if (!image.storageKey || !(await mediaExists(image.storageKey)))
         throw new AppError(
@@ -97,18 +132,11 @@ export async function changeListingStatus(input: unknown) {
     listing.id,
     user.id,
     listing.status,
-    data.status,
+    status,
     listing.updatedAt,
   );
+  return status;
 }
-export async function contactSeller(id: unknown) {
-  const listingId = z.cuid().parse(id);
-  const user = await getCurrentUser();
-  const listing = await listingRepository.recordContact(listingId, user?.id);
-  const text = `Olá! Vi seu anúncio '${listing.title}' na plataforma e tenho interesse. Ainda está disponível?`;
-  return `https://wa.me/${listing.seller.whatsapp}?text=${encodeURIComponent(text)}`;
-}
-
 export async function trackListingView(id: unknown) {
   const parsed = z.cuid().safeParse(id);
   if (parsed.success) await listingRepository.recordView(parsed.data);

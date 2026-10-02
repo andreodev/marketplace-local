@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AppError, type ActionState } from "@/lib/errors";
-import { removeListingAsAdmin } from "../services/admin-listing-service";
+import { removeListingAsAdmin, reviewAccountListing } from "../services/admin-listing-service";
 
 export async function removeListingAsAdminAction(
   _state: ActionState,
@@ -24,5 +24,29 @@ export async function removeListingAsAdminAction(
       error instanceof Error ? error.name : "UnknownError",
     );
     return { error: "Não foi possível remover o anúncio." };
+  }
+}
+
+export async function reviewAccountListingAction(
+  _state: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await reviewAccountListing(Object.fromEntries(formData));
+    revalidatePath("/");
+    revalidatePath("/buscar");
+    revalidatePath("/admin");
+    revalidatePath("/admin/anuncios");
+    revalidatePath("/meus-anuncios");
+    revalidatePath("/admin/anuncios/[id]", "page");
+    revalidatePath("/anuncio/[slug]", "page");
+    revalidatePath("/categoria/[slug]", "page");
+    return { success: "Revisão registrada." };
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0].message };
+    if (error instanceof AppError) return { error: error.message };
+    if (error instanceof Error && "digest" in error) throw error;
+    console.error("Account listing review failed", error instanceof Error ? error.name : "UnknownError");
+    return { error: "Não foi possível revisar o anúncio." };
   }
 }

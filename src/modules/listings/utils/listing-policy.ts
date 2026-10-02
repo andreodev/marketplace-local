@@ -10,9 +10,10 @@ export function assertListingOwner(
 }
 
 const transitions: Record<ListingStatus, readonly ListingStatus[]> = {
-  DRAFT: ["ACTIVE", "REMOVED"],
-  ACTIVE: ["PAUSED", "SOLD", "REMOVED"],
-  PAUSED: ["ACTIVE", "SOLD", "REMOVED"],
+  DRAFT: ["ACTIVE", "PENDING_REVIEW", "REMOVED"],
+  PENDING_REVIEW: ["DRAFT", "REMOVED"],
+  ACTIVE: ["PENDING_REVIEW", "PAUSED", "SOLD", "REMOVED"],
+  PAUSED: ["ACTIVE", "PENDING_REVIEW", "SOLD", "REMOVED"],
   SOLD: ["REMOVED"],
   REMOVED: [],
 };

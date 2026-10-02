@@ -17,7 +17,7 @@ export async function loginAction(
   try {
     await signIn("credentials", {
       ...parsed.data,
-      redirectTo: "/meus-anuncios",
+      redirectTo: typeof formData.get("callbackUrl") === "string" && String(formData.get("callbackUrl")).startsWith("/") && !String(formData.get("callbackUrl")).startsWith("//") ? String(formData.get("callbackUrl")) : "/meus-anuncios",
     });
   } catch (error) {
     if (error instanceof AuthError)

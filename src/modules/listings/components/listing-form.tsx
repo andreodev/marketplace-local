@@ -8,6 +8,7 @@ import {
   uploadPhotoAction,
 } from "../actions/listing-actions";
 import { states } from "../schemas/listing";
+import { ACCOUNT_CATEGORY_SLUG, accountTypeLabels } from "../utils/account-policy";
 import {
   mediaUrl,
   MAX_LISTING_IMAGES,
@@ -26,13 +27,17 @@ type InitialListing = {
   city: string;
   state: string;
   neighborhood: string;
+  accountPlatform: string | null;
+  accountType: string | null;
+  accountPolicyUrl: string | null;
+  accountTransferConfirmed: boolean;
   images: string[];
 };
 export function ListingForm({
   categories,
   initial,
 }: {
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string; slug: string }[];
   initial?: InitialListing;
 }) {
   const [result, action, pending] = useActionState(saveListingAction, {});
@@ -45,6 +50,9 @@ export function ListingForm({
     city: initial?.city ?? "",
     state: initial?.state ?? "",
     neighborhood: initial?.neighborhood ?? "",
+    accountPlatform: initial?.accountPlatform ?? "",
+    accountType: initial?.accountType ?? "",
+    accountPolicyUrl: initial?.accountPolicyUrl ?? "",
   });
   const [images, setImages] = useState(initial?.images ?? []);
   const [uploading, setUploading] = useState(false);
@@ -96,6 +104,9 @@ export function ListingForm({
   const selectClass =
     "h-12 w-full rounded-xl border border-input bg-background px-4 focus-visible:outline-2 focus-visible:outline-primary";
   const isDraft = !initial || initial.status === "DRAFT";
+  const isAccount = categories.some(
+    (category) => category.id === values.categoryId && category.slug === ACCOUNT_CATEGORY_SLUG,
+  );
   return (
     <form action={action} className="space-y-8">
       {initial && (
@@ -184,6 +195,39 @@ export function ListingForm({
           </select>
         </div>
       </fieldset>
+      {isAccount && (
+        <fieldset disabled={pending || uploading} className="space-y-5 rounded-xl border bg-card p-5">
+          <legend className="px-2 text-xl font-semibold">Sobre a conta digital</legend>
+          <p className="text-sm text-muted-foreground">
+            Anúncios desta categoria passam por revisão antes de aparecer na vitrine. Só anuncie contas cuja plataforma permita a transferência. Steam e Epic Games não são aceitas.
+          </p>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <label htmlFor="accountPlatform" className="mb-2 block text-sm font-medium">Plataforma</label>
+              <Input {...field("accountPlatform")} maxLength={80} placeholder="Nome da plataforma" />
+            </div>
+            <div>
+              <label htmlFor="accountType" className="mb-2 block text-sm font-medium">Tipo de conta</label>
+              <select {...field("accountType")} className={selectClass}>
+                <option value="">Selecione</option>
+                {Object.entries(accountTypeLabels).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="accountPolicyUrl" className="mb-2 block text-sm font-medium">Link das regras de transferência</label>
+            <Input {...field("accountPolicyUrl")} type="url" maxLength={500} placeholder="https://plataforma.com/regras" />
+            <p className="mt-1 text-xs text-muted-foreground">Use uma página pública da própria plataforma que permita transferir a conta.</p>
+          </div>
+          <label className="flex items-start gap-3 text-sm">
+            <input type="checkbox" name="accountTransferConfirmed" defaultChecked={initial?.accountTransferConfirmed ?? false} className="mt-1" />
+            <span>Confirmo que sou titular da conta e que sua venda ou transferência é permitida pelas regras da plataforma.</span>
+          </label>
+          <p className="text-sm font-medium text-red-700">Não coloque e-mail de acesso, senha, token ou código de recuperação no título, descrição ou fotos.</p>
+        </fieldset>
+      )}
       <fieldset disabled={pending || uploading} className="space-y-4">
         <legend className="mb-3 text-xl font-semibold">Fotos do produto</legend>
         <p className="text-sm text-muted-foreground">

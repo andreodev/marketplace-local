@@ -1,6 +1,7 @@
 import type { ListingStatus } from "@/generated/prisma/enums";
 export const statusLabels: Record<ListingStatus, string> = {
   DRAFT: "Rascunho",
+  PENDING_REVIEW: "Em análise",
   ACTIVE: "Ativo",
   PAUSED: "Pausado",
   SOLD: "Vendido",

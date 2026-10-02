@@ -11,6 +11,8 @@ export async function findMyListing(id: string) {
   return listingRepository.findOwned(id, user.id);
 }
 export const listRecentListings = () => listingRepository.recent();
+export const listFeaturedByCategory = (categoryIds: string[]) =>
+  listingRepository.featuredByCategory(categoryIds);
 export const findPublicListing = (slug: string) =>
   listingRepository.findPublic(slug);
 export const searchPublicListings = (search: ListingSearch) =>

@@ -7,7 +7,6 @@ import { AppError, type ActionState } from "@/lib/errors";
 import {
   saveListing,
   changeListingStatus,
-  contactSeller,
   trackListingView,
 } from "../services/listing-service";
 import { uploadListingPhoto } from "../services/media-service";
@@ -26,6 +25,8 @@ function failure(error: unknown): ActionState {
 }
 function refreshListings() {
   revalidatePath("/");
+  revalidatePath("/buscar");
+  revalidatePath("/categoria/[slug]", "page");
   revalidatePath("/meus-anuncios");
   revalidatePath("/anuncio/[slug]", "page");
 }
@@ -43,39 +44,43 @@ export async function saveListingAction(
       "city",
       "state",
       "neighborhood",
+      "accountPlatform",
+      "accountType",
+      "accountPolicyUrl",
       "intent",
     ];
     const input = Object.fromEntries(
-      fields.map((field) => [field, formData.get(field)]),
+      fields.map((field) => [field, formData.get(field) ?? ""]),
     );
-    await saveListing({
+    const saved = await saveListing({
       ...input,
+      accountTransferConfirmed: formData.get("accountTransferConfirmed") === "on",
       images: formData.getAll("images"),
       ...(formData.get("id")
         ? { id: formData.get("id"), updatedAt: formData.get("updatedAt") }
         : {}),
     });
+    refreshListings();
+    redirect(saved.status === "PENDING_REVIEW" ? "/meus-anuncios?sucesso=analise" : "/meus-anuncios?sucesso=salvo");
   } catch (error) {
     return failure(error);
   }
-  refreshListings();
-  redirect("/meus-anuncios?sucesso=salvo");
 }
 export async function changeStatusAction(
   _state: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   try {
-    await changeListingStatus({
+    const status = await changeListingStatus({
       id: formData.get("id"),
       updatedAt: formData.get("updatedAt"),
       status: formData.get("status"),
     });
+    refreshListings();
+    return { success: status === "PENDING_REVIEW" ? "Anúncio enviado para análise." : "Status atualizado." };
   } catch (error) {
     return failure(error);
   }
-  refreshListings();
-  return { success: "Status atualizado." };
 }
 export async function uploadPhotoAction(
   formData: FormData,
@@ -88,18 +93,6 @@ export async function uploadPhotoAction(
   } catch (error) {
     return failure(error);
   }
-}
-export async function contactSellerAction(
-  _state: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  let url: string;
-  try {
-    url = await contactSeller(formData.get("id"));
-  } catch (error) {
-    return failure(error);
-  }
-  redirect(url);
 }
 export async function recordViewAction(id: string) {
   const parsed = z.cuid().safeParse(id);

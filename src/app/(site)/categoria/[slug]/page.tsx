@@ -6,6 +6,7 @@ import {
   listCategories,
 } from "@/modules/categories/queries/categories";
 import { ListingGrid } from "@/modules/listings/components/listing-grid";
+import { CategoryInterestTracker } from "@/modules/listings/components/category-interest-tracker";
 import { ListingSearchForm } from "@/modules/listings/components/listing-search-form";
 import { searchPublicListings } from "@/modules/listings/queries/listings";
 import { parseListingSearch } from "@/modules/listings/schemas/search";
@@ -27,6 +28,7 @@ export default async function CategoryPage({
   if (!category) notFound();
   return (
     <>
+      <CategoryInterestTracker slug={slug} eventKey={`category:${slug}`} />
       <Link href="/buscar" className="text-sm text-primary">
         ← Todas as categorias
       </Link>

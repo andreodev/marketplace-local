@@ -25,10 +25,9 @@ export default async function Profile() {
           },
           {
             name: "whatsapp",
-            label: "WhatsApp com DDD",
+            label: "WhatsApp com DDD (opcional)",
             type: "tel",
-            required: true,
-            defaultValue: user.whatsapp,
+            defaultValue: user.whatsapp ?? "",
           },
           {
             name: "image",

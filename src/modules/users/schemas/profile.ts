@@ -21,7 +21,7 @@ export const profileSchema = z.object({
   phone: z
     .union([z.literal(""), brazilianPhoneSchema])
     .transform((value) => value || null),
-  whatsapp: brazilianPhoneSchema,
+  whatsapp: z.union([z.literal(""), brazilianPhoneSchema]).transform((value) => value || null),
   image: z
     .union([z.literal(""), z.url({ protocol: /^https$/ }).max(2048)])
     .transform((value) => value || null),

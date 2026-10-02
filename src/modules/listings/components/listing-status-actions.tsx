@@ -13,7 +13,7 @@ export function ListingStatusActions({
   return (
     <div>
       <div className="mb-2 flex flex-wrap gap-2">
-        {["DRAFT", "ACTIVE", "PAUSED"].includes(listing.status) && (
+        {["DRAFT", "PENDING_REVIEW", "ACTIVE", "PAUSED"].includes(listing.status) && (
           <Button asChild variant="outline" size="sm">
             <Link href={`/meus-anuncios/${listing.id}/editar`}>Editar</Link>
           </Button>

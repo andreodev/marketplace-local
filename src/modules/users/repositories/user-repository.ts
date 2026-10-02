@@ -27,7 +27,7 @@ export const userRepository = {
   create(data: {
     name: string;
     email: string;
-    whatsapp: string;
+    whatsapp: string | null;
     passwordHash: string;
   }) {
     return db.user.create({ data, select: { id: true } });

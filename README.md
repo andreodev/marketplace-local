@@ -1,6 +1,6 @@
 # Perto — marketplace local
 
-Fundação e módulo de anúncios implementados. Monólito Next.js App Router, TypeScript strict, Tailwind 4, componentes shadcn/ui locais, Prisma 7 e PostgreSQL. Sem API separada, pagamentos, entregas ou chat.
+Fundação e módulo de anúncios implementados. Monólito Next.js App Router, TypeScript strict, Tailwind 4, componentes shadcn/ui locais, Prisma 7 e PostgreSQL. O destaque por anúncio usa Pix; compras de produtos, entregas e chat continuam fora da plataforma.
 
 ## Executar localmente
 
@@ -16,6 +16,13 @@ npm run db:deploy
 npm run db:seed
 npm run dev
 ```
+
+Para visualizar a interface de classificados com dados de exemplo, execute
+`npm run db:demo` depois de aplicar as migrations. O comando cria 100 anúncios
+locais com fotos ilustrativas em `public/demo-listings/` e pode ser repetido sem
+duplicar os anúncios. Ele aceita somente `DATABASE_URL` apontando para
+`localhost` ou `127.0.0.1`. As fotos podem ser baixadas novamente com
+`node scripts/download-demo-images.mjs`.
 
 Abra http://localhost:3000. O banco Docker usa a porta 5434, ligada somente a localhost. O volume persiste os dados. As credenciais do compose são exclusivamente para desenvolvimento.
 
@@ -123,7 +130,7 @@ Cadastre uma conta pela interface. Promova explicitamente no banco pelo `npm run
 
 `npm test` verifica senha, email, dinheiro, propriedade, status e validação de mídias. `npm run test:integration` usa PostgreSQL local e contas/anúncios temporários para verificar escrita por proprietário, concorrência, estados, métricas, storage local e protocolo S3 com servidor de teste. Não usa nem envia arquivos a um fornecedor externo. Lint, typecheck e build são comandos separados.
 
-Próxima etapa: refinamento do catálogo conforme uso real — relevância da busca, paginação por cursor, limpeza de uploads abandonados e observabilidade. Cadastro de anúncios, publicação, gestão, busca, filtros, páginas de categoria e vendedor, favoritos, denúncias, home com anúncios recentes, página do produto, contato e administração já estão implementados. Não antecipar checkout, carrinho ou pagamentos.
+Próxima etapa: refinamento do catálogo conforme uso real — relevância da busca, paginação por cursor, limpeza de uploads abandonados e observabilidade. Cadastro de anúncios, publicação, gestão, busca, filtros, páginas de categoria e vendedor, favoritos, denúncias, vitrine, página do produto, contato, administração e destaque pago já estão implementados. Não há checkout para a compra dos produtos anunciados.
 
 Referências oficiais consultadas: [Auth.js](https://authjs.dev), [Prisma config](https://www.prisma.io/docs/orm/reference/prisma-config-reference), [shadcn com Tailwind 4](https://ui.shadcn.com/docs/tailwind-v4).
 
@@ -147,9 +154,19 @@ Referências oficiais consultadas: [Auth.js](https://authjs.dev), [Prisma config
 
 ## Busca e catálogo
 
+- A home mostra uma vitrine em grade com até quatro anúncios de cada uma das três categorias em destaque. A ordem considera as categorias pesquisadas neste navegador; sem histórico, usa as categorias com anúncios recentes. O histórico fica no armazenamento local do navegador.
+- Resultados de busca e páginas de categoria continuam em uma lista vertical de uma coluna.
+
 - `/buscar` filtra anúncios ativos por termo no título/descrição, categoria, cidade, UF e condição; filtros são enviados pela URL e funcionam sem JavaScript.
 - Categoria e vendedor expõem somente anúncios ativos de vendedores ativos, em categorias ativas. Perfil público não inclui email, telefone nem WhatsApp.
 - A busca retorna 24 resultados por página. O índice textual em português já existe na migration; para o MVP a consulta usa busca parcial case-insensitive. Migrar para full-text quando a base exigir relevância, stemming ou escala maior.
+
+## Contas digitais
+
+- O formulário solicita plataforma, tipo de conta, link HTTPS para as regras de transferência e confirmação de titularidade/permissão. Rascunhos podem ficar incompletos; enviar para publicação exige todos os dados e pelo menos uma foto.
+- O servidor rejeita anúncios de Steam e Epic Games e texto com e-mail de acesso, senha, token ou código identificado. Fotos e a política informada precisam de revisão humana. A categoria não aceita publicação direta: o anúncio fica `PENDING_REVIEW`, fora da busca e da vitrine.
+- Em `/admin/anuncios`, o administrador vê a fila, pode aprovar ou rejeitar com motivo. Rejeição devolve o anúncio a `DRAFT`; o vendedor vê o motivo e pode corrigir e reenviar. Edições de contas já publicadas voltam para revisão.
+- A plataforma precisa confirmar as regras de cada serviço antes de aprovar. [Steam](https://help.steampowered.com/pt-br/faqs/view/1662-E814-CA77-240E) e [Epic Games](https://www.epicgames.com/help/c-45487929/c-38978022/a14738255) proíbem venda de contas.
 
 ## Favoritos e denúncias
 
@@ -165,3 +182,11 @@ Referências oficiais consultadas: [Auth.js](https://authjs.dev), [Prisma config
 - Categorias podem ser criadas, editadas, ordenadas e desativadas. Não há exclusão física de categoria vinculada a anúncios.
 - Denúncias podem passar para REVIEWING, RESOLVED ou DISMISSED. A ação registra o administrador e a data de conclusão para estados finais.
 - O administrador local `dev@perto.local` foi promovido para ADMIN para desenvolvimento. Use as mesmas credenciais informadas anteriormente.
+
+## Destaque pago por anúncio
+
+- O vendedor pode destacar um anúncio ativo em `/meus-anuncios` por R$ 19,90 durante 7 dias. O formulário pede CPF do pagador apenas para gerar o Pix; o documento não é salvo no banco local.
+- Configure `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` no ambiente. Cadastre no painel do Mercado Pago o evento `payment` para `https://SEU-DOMINIO/api/webhooks/mercado-pago`. Sem essas credenciais a cobrança não funciona.
+- O QR Code e o Pix Copia e Cola aparecem na página do pedido. A confirmação vem pelo webhook assinado ou pela consulta autenticada ao Mercado Pago quando o vendedor atualiza a página. A aplicação confere ID, referência, valor e forma de pagamento antes de ativar o destaque.
+- Anúncios com destaque vigente aparecem antes dos demais na vitrine e na lista de busca, com selo visual. A prioridade termina automaticamente ao vencer `featuredUntil`. Um anúncio pausado, removido ou ainda em revisão continua oculto.
+- Teste com credenciais de teste e webhook público antes de usar dinheiro real. A integração usa a [API Pix](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-payments/integration-configuration/integrate-pix) e a [validação de Webhooks](https://www.mercadopago.com.br/developers/pt/docs/subscriptions/additional-content/your-integrations/notifications/webhooks) do Mercado Pago.

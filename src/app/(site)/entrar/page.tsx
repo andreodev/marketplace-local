@@ -4,7 +4,7 @@ import { loginAction } from "@/modules/auth/actions/auth-actions";
 export default async function Login({
   searchParams,
 }: {
-  searchParams: Promise<{ cadastro?: string }>;
+  searchParams: Promise<{ cadastro?: string; callbackUrl?: string }>;
 }) {
   const params = await searchParams;
   return (
@@ -20,6 +20,7 @@ export default async function Login({
       )}
       <ActionForm
         action={loginAction}
+        hiddenFields={params.callbackUrl ? { callbackUrl: params.callbackUrl } : undefined}
         fields={[
           {
             name: "email",

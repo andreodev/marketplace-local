@@ -12,7 +12,7 @@ export const loginSchema = z.object({
 
 export const registerSchema = loginSchema.extend({
   name: z.string().trim().min(2, "Informe seu nome.").max(100),
-  whatsapp: brazilianPhoneSchema,
+  whatsapp: z.union([z.literal(""), brazilianPhoneSchema]).transform((value) => value || null),
   password: z
     .string()
     .min(10, "Use uma senha com pelo menos 10 caracteres.")

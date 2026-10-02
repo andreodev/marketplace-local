@@ -7,6 +7,8 @@ import { AdminActionButton } from "@/components/admin-action-button";
 import { removeListingAsAdminAction } from "@/modules/listings/actions/admin-listing-actions";
 import { findListingForAdmin } from "@/modules/listings/queries/admin-listings";
 import { formatPrice } from "@/modules/listings/utils/presentation";
+import { AccountReviewActions } from "@/modules/listings/components/account-review-actions";
+import { ACCOUNT_CATEGORY_SLUG, accountTypeLabels } from "@/modules/listings/utils/account-policy";
 
 export default async function AdminListingPage({
   params,
@@ -57,6 +59,14 @@ export default async function AdminListingPage({
             <span className="text-muted-foreground">Categoria:</span>{" "}
             {listing.category.name}
           </p>
+          {listing.category.slug === ACCOUNT_CATEGORY_SLUG && (
+            <>
+              <p><span className="text-muted-foreground">Plataforma:</span> {listing.accountPlatform || "Não informada"}</p>
+              <p><span className="text-muted-foreground">Tipo:</span> {listing.accountType && listing.accountType in accountTypeLabels ? accountTypeLabels[listing.accountType as keyof typeof accountTypeLabels] : "Não informado"}</p>
+              <p className="break-all"><span className="text-muted-foreground">Regras de transferência:</span> {listing.accountPolicyUrl || "Não informadas"}</p>
+              <p><span className="text-muted-foreground">Declaração do vendedor:</span> {listing.accountTransferConfirmed ? "Confirmada" : "Pendente"}</p>
+            </>
+          )}
           <p>
             <span className="text-muted-foreground">Local:</span>{" "}
             {listing.neighborhood}, {listing.city} · {listing.state}
@@ -77,6 +87,11 @@ export default async function AdminListingPage({
           )}
         </Card>
       </div>
+      {listing.status === "PENDING_REVIEW" && listing.category.slug === ACCOUNT_CATEGORY_SLUG && (
+        <div className="mt-6 max-w-3xl">
+          <AccountReviewActions id={listing.id} updatedAt={listing.updatedAt.toISOString()} />
+        </div>
+      )}
       <section className="mt-8 max-w-3xl">
         <h2 className="mb-3 text-xl font-semibold">Descrição</h2>
         <p className="whitespace-pre-wrap text-muted-foreground">

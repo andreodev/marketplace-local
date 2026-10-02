@@ -7,6 +7,11 @@ export async function listListingsForAdmin() {
   return listingRepository.listForAdmin();
 }
 
+export async function listPendingAccountReviews() {
+  await requireAdmin();
+  return listingRepository.listPendingAccountReviews();
+}
+
 export async function findListingForAdmin(id: string) {
   await requireAdmin();
   return listingRepository.findForAdmin(id);

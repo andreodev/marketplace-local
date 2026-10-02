@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import sharp from "sharp";
 import { db } from "../src/lib/db";
 import { listingRepository } from "../src/modules/listings/repositories/listing-repository";
+import { applyPayment } from "../src/modules/listings/services/promotion-payment";
 import { putMedia, readMedia, mediaExists } from "../src/lib/media-storage";
 import { favoriteRepository } from "../src/modules/favorites/repositories/favorite-repository";
 import { reportRepository } from "../src/modules/reports/repositories/report-repository";
@@ -16,7 +17,7 @@ import { userRepository } from "../src/modules/users/repositories/user-repositor
 test("database and local storage: ownership, concurrency, publication and metrics", async () => {
   const previousDriver = process.env.MEDIA_DRIVER;
   process.env.MEDIA_DRIVER = "local";
-  const category = await db.category.findFirst({ where: { active: true } });
+  const category = await db.category.findFirst({ where: { active: true, slug: { not: "contas-digitais" } } });
   assert.ok(category, "Run npm run db:seed first");
   const owner = await db.user.create({
     data: {
@@ -246,6 +247,66 @@ test("database and local storage: ownership, concurrency, publication and metric
   }
 });
 
+test("digital account listings require review before appearing publicly", async () => {
+  const previousDriver = process.env.MEDIA_DRIVER;
+  process.env.MEDIA_DRIVER = "local";
+  const category = await db.category.findUnique({ where: { slug: "contas-digitais" } });
+  assert.ok(category?.active, "Run npm run db:seed first");
+  const owner = await db.user.create({
+    data: {
+      name: "Account review check",
+      email: `test-${randomUUID()}@example.invalid`,
+      passwordHash: "test-only",
+      whatsapp: "5592999999999",
+    },
+  });
+  const key = `listings/${owner.id}/${randomUUID()}.webp`;
+  let listingId: string | undefined;
+  try {
+    await putMedia(key, await sharp({
+      create: { width: 24, height: 24, channels: 3, background: "#146b50" },
+    }).webp().toBuffer());
+    const data = {
+      title: "Conta digital de demonstração",
+      description: "Perfil de teste para validar a revisão dos anúncios digitais.",
+      price: "200.00",
+      categoryId: category.id,
+      condition: "USED" as const,
+      city: "Manaus",
+      state: "AM" as const,
+      neighborhood: "Centro",
+      images: [key],
+      accountPlatform: "Plataforma de teste",
+      accountType: "PROFESSIONAL" as const,
+      accountPolicyUrl: "https://example.com/transferencia",
+      accountTransferConfirmed: true,
+    };
+    const slug = `account-review-${randomUUID()}`;
+    await assert.rejects(listingRepository.save(owner.id, data, "ACTIVE", slug));
+    const pending = await listingRepository.save(owner.id, data, "PENDING_REVIEW", slug);
+    listingId = pending.id;
+    assert.equal(await listingRepository.findPublic(slug), null);
+    await assert.rejects(listingRepository.changeStatus(pending.id, owner.id, "PENDING_REVIEW", "ACTIVE", pending.updatedAt));
+    await listingRepository.reviewAccountListing(pending.id, pending.updatedAt, false, "Revisar as regras da plataforma.");
+    const rejected = await listingRepository.findOwned(pending.id, owner.id);
+    assert.equal(rejected?.status, "DRAFT");
+    assert.equal(rejected?.moderationNote, "Revisar as regras da plataforma.");
+    const resubmitted = await listingRepository.save(owner.id, data, "PENDING_REVIEW", slug, {
+      id: pending.id,
+      updatedAt: rejected!.updatedAt,
+    });
+    assert.equal(resubmitted.moderationNote, null);
+    await listingRepository.reviewAccountListing(resubmitted.id, resubmitted.updatedAt, true, "");
+    assert.ok(await listingRepository.findPublic(slug));
+  } finally {
+    if (listingId) await db.listing.delete({ where: { id: listingId } });
+    await db.user.delete({ where: { id: owner.id } });
+    await rm(resolve(process.env.MEDIA_LOCAL_DIR ?? ".data/media", "listings", owner.id), { recursive: true, force: true });
+    if (previousDriver === undefined) delete process.env.MEDIA_DRIVER;
+    else process.env.MEDIA_DRIVER = previousDriver;
+  }
+});
+
 test("S3 compatible storage: signed PUT, HEAD and streamed GET", async () => {
   const bytes = Buffer.from("storage integration check");
   let uploaded: Buffer | undefined;
@@ -313,6 +374,41 @@ test("S3 compatible storage: signed PUT, HEAD and streamed GET", async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
+test("paid promotion activates once and ranks ahead of regular listings", async () => {
+  const category = await db.category.findFirstOrThrow({ where: { active: true, slug: { not: "contas-digitais" } } });
+  const owner = await db.user.create({ data: { name: "Promotion test", email: `promo-${randomUUID()}@example.invalid`, passwordHash: "test-only", whatsapp: "5592999999999" } });
+  const marker = `promotion-${randomUUID()}`;
+  const ids: string[] = [];
+  try {
+    for (const index of [1, 2]) {
+      const listing = await db.listing.create({ data: { slug: `${marker}-${index}`, title: `${marker} item ${index}`, description: "Temporary promotion ranking check", price: "50.00", condition: "USED", status: "ACTIVE", city: "Manaus", state: "AM", neighborhood: "Centro", sellerId: owner.id, categoryId: category.id } });
+      ids.push(listing.id);
+    }
+    const order = await db.listingPromotion.create({ data: { listingId: ids[0], sellerId: owner.id, amountCents: 1990, durationDays: 7, providerPaymentId: "987654321" } });
+    const payment = { id: 987654321, status: "approved", external_reference: order.id, transaction_amount: 19.9, payment_method_id: "pix" };
+    await applyPayment({ ...payment, transaction_amount: 1 });
+    assert.equal((await db.listingPromotion.findUniqueOrThrow({ where: { id: order.id } })).status, "PENDING");
+    await applyPayment(payment);
+    await applyPayment(payment);
+    const applied = await db.listingPromotion.findUniqueOrThrow({ where: { id: order.id } });
+    assert.equal(applied.status, "PAID");
+    assert.ok(applied.appliedUntil && applied.appliedUntil > new Date());
+    const results = await listingRepository.searchPublic({ query: marker });
+    assert.deepEqual(results.map((item) => item.id), ids);
+    await db.listing.update({ where: { id: ids[0] }, data: { featuredUntil: new Date(Date.now() - 1000) } });
+    const expiredResults = await listingRepository.searchPublic({ query: marker });
+    assert.deepEqual(expiredResults.map((item) => item.id), [ids[1], ids[0]]);
+    await db.listing.update({ where: { id: ids[0] }, data: { featuredUntil: applied.appliedUntil } });
+    await applyPayment({ ...payment, status: "refunded" });
+    assert.equal((await db.listingPromotion.findUniqueOrThrow({ where: { id: order.id } })).status, "REVERSED");
+    assert.equal((await db.listing.findUniqueOrThrow({ where: { id: ids[0] } })).featuredUntil, null);
+  } finally {
+    await db.listingPromotion.deleteMany({ where: { sellerId: owner.id } });
+    await db.listing.deleteMany({ where: { id: { in: ids } } });
+    await db.user.delete({ where: { id: owner.id } });
+  }
+});
+
 after(async () => {
   await db.$disconnect();
 });

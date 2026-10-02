@@ -1,0 +1,1 @@
+ALTER TYPE "ListingStatus" ADD VALUE 'PENDING_REVIEW';

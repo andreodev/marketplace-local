@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { mediaKeyPattern, MAX_LISTING_IMAGES } from "../utils/media-policy";
+import { accountTypes } from "../utils/account-policy";
 
 export const states = [
   "AC",
@@ -55,6 +56,10 @@ export const listingSchema = z
     city: z.string().trim().min(2).max(100),
     state: z.enum(states),
     neighborhood: z.string().trim().min(2).max(100),
+    accountPlatform: z.string().trim().max(80).default(""),
+    accountType: z.union([z.enum(accountTypes), z.literal("")]).default(""),
+    accountPolicyUrl: z.string().trim().max(500).default(""),
+    accountTransferConfirmed: z.boolean().default(false),
     images: z
       .array(z.string().regex(mediaKeyPattern, "Foto inválida."))
       .max(MAX_LISTING_IMAGES)

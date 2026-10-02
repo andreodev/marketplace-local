@@ -1,25 +1,39 @@
 @import "tailwindcss";
 :root {
-  --background: #ffffff;
-  --foreground: #182522;
-  --primary: #146b50;
+  --background: #f7f8f6;
+  --foreground: #1c2924;
+  --primary: #176b50;
   --primary-foreground: #ffffff;
-  --muted: #f3f6f4;
-  --muted-foreground: #64736c;
-  --border: #e2e9e4;
-  --input: #d6e0da;
+  --secondary: #e8f1ec;
+  --secondary-foreground: #14553f;
+  --accent: #edf3ef;
+  --accent-foreground: #183f30;
+  --muted: #eef1ee;
+  --muted-foreground: #68746e;
+  --border: #dfe5df;
+  --input: #d6dfd7;
   --card: #ffffff;
+  --card-foreground: #1c2924;
+  --ring: #176b50;
+  --destructive: #b33333;
 }
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
   --font-sans: Arial, Helvetica, sans-serif;
 }
 @layer base {
