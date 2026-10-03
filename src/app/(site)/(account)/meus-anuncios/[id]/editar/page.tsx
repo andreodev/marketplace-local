@@ -4,6 +4,7 @@ import { z } from "zod";
 import { listCategories } from "@/modules/categories/queries/categories";
 import { findMyListing } from "@/modules/listings/queries/listings";
 import { ListingForm } from "@/modules/listings/components/listing-form";
+import { mockListingImageKeyFromUrl } from "@/modules/listings/utils/media-policy";
 export const metadata = { title: "Editar anúncio" };
 export default async function EditListing({
   params,
@@ -42,9 +43,9 @@ export default async function EditListing({
           accountType: listing.accountType,
           accountPolicyUrl: listing.accountPolicyUrl,
           accountTransferConfirmed: listing.accountTransferConfirmed,
-          images: listing.images.flatMap((image) =>
-            image.storageKey ? [image.storageKey] : [],
-          ),
+          images: listing.images
+            .map((image) => image.storageKey ?? mockListingImageKeyFromUrl(image.url))
+            .filter((key): key is string => Boolean(key)),
         }}
       />
     </section>

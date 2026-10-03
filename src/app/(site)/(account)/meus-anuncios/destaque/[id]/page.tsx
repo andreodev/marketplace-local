@@ -1,11 +1,14 @@
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMyPromotion, PROMOTION_DAYS, PROMOTION_PRICE_CENTS } from "@/modules/listings/services/promotion-service";
 import { formatPrice } from "@/modules/listings/utils/presentation";
+
+import Image from "next/image";
 import { AppError } from "@/lib/errors";
+
+const staticQrImageUrl = process.env.MERCADO_PAGO_QR_STATIC_IMAGE_URL;
 
 export const metadata = { title: "Destaque do anúncio" };
 
@@ -39,7 +42,7 @@ export default async function PromotionPage({ params }: { params: Promise<{ id: 
           ) : (
             <div className="space-y-4">
               <p className="font-medium">Pague com Pix para ativar o destaque.</p>
-              {order.pixQrCodeBase64 && <Image src={`data:image/png;base64,${order.pixQrCodeBase64}`} alt="QR Code do Pix" width={240} height={240} unoptimized className="mx-auto" />}
+              {order.pixQrCodeBase64 ? <Image src={`data:image/png;base64,${order.pixQrCodeBase64}`} alt="QR Code do Pix" width={240} height={240} unoptimized className="mx-auto" /> : staticQrImageUrl && <Image src={staticQrImageUrl} alt="QR Code do Pix" width={240} height={240} unoptimized className="mx-auto" />}
               {order.pixCode && <div><label htmlFor="pix-code" className="text-sm font-medium">Pix Copia e Cola</label><textarea id="pix-code" readOnly value={order.pixCode} className="mt-1 h-24 w-full rounded-lg border bg-background p-3 text-xs" /></div>}
               <p className="text-sm text-muted-foreground">Depois do pagamento, atualize esta página. A confirmação também chega automaticamente pelo Mercado Pago.</p>
               <Button asChild variant="outline"><Link href={`/meus-anuncios/destaque/${order.id}`}>Atualizar status</Link></Button>

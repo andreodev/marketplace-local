@@ -7,6 +7,9 @@ import {
   assertMediaKey,
   assertUploadFile,
   MAX_IMAGE_BYTES,
+  isMockListingImage,
+  mockListingImageKey,
+  mockListingImagePath,
 } from "../src/modules/listings/utils/media-policy";
 import {
   saveListingSchema,
@@ -26,6 +29,10 @@ test("Mercado Pago webhook requires valid recent signature and payment ID", () =
   const hash = createHmac("sha256", secret).update(`id:${dataId};request-id:${requestId};ts:${ts};`).digest("hex");
   const signature = `ts=${ts},v1=${hash}`;
   assert.equal(validMercadoPagoSignature(signature, requestId, dataId, secret, now), true);
+  const orderId = "ORDTST01M3YNSR7W4E5DSJP48TG80V4V";
+  const orderHash = createHmac("sha256", secret).update(`id:${orderId.toLowerCase()};request-id:${requestId};ts:${ts};`).digest("hex");
+  assert.equal(validMercadoPagoSignature(`ts=${ts},v1=${orderHash}`, requestId, orderId, secret, now), true);
+  assert.equal(validMercadoPagoSignature(`ts=${ts},v1=${orderHash}`, requestId, "123456", secret, now), false);
   assert.equal(validMercadoPagoSignature(signature, requestId, "987654322", secret, now), false);
   assert.equal(validMercadoPagoSignature(signature, requestId, dataId, "wrong", now), false);
   assert.equal(validMercadoPagoSignature(signature, requestId, dataId, secret, now + 11 * 60_000), false);
@@ -71,6 +78,10 @@ test("listing boundary: media ownership, files and inputs", () => {
     intent: "DRAFT",
   };
   assert.equal(saveListingSchema.parse(data).price, "123.45");
+  assert.doesNotThrow(() => saveListingSchema.parse({ ...data, images: [] }));
+  assert.doesNotThrow(() =>
+    saveListingSchema.parse({ ...data, images: [mockListingImageKey("bicicleta")] }),
+  );
   assert.equal(
     saveListingSchema.safeParse({ ...data, sellerId: "forged" }).success,
     false,
@@ -105,6 +116,12 @@ test("listing boundary: media ownership, files and inputs", () => {
   assert.doesNotThrow(() => assertStatusTransition("PAUSED", "ACTIVE"));
   assert.doesNotThrow(() => assertStatusTransition("ACTIVE", "SOLD"));
   assert.throws(() => assertStatusTransition("SOLD", "ACTIVE"));
+});
+test("mock listing images only resolve bundled files", () => {
+  assert.equal(mockListingImagePath("bicicleta"), "public/demo-listings/bicicleta.jpg");
+  assert.equal(isMockListingImage(mockListingImageKey("bicicleta")), true);
+  assert.equal(isMockListingImage("mock:../private"), false);
+  assert.throws(() => mockListingImagePath("../private"));
 });
 
 test("account listings require permitted transfer and never expose credentials", () => {

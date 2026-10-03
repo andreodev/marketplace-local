@@ -4,15 +4,15 @@ import { Prisma, type ListingStatus } from "@/generated/prisma/client";
 import type { z } from "zod";
 import { listingSchema } from "../schemas/listing";
 import { AppError } from "@/lib/errors";
-import { mediaUrl } from "../utils/media-policy";
+import { isMockListingImage, mediaUrl } from "../utils/media-policy";
 import { ACCOUNT_CATEGORY_SLUG, assertAccountListingContent, assertAccountListingReady } from "../utils/account-policy";
 
 type ListingData = z.input<typeof listingSchema>;
 const orderedImages = { orderBy: { position: "asc" as const } };
 const imageData = (keys: string[]) =>
-  keys.map((storageKey, position) => ({
-    storageKey,
-    url: mediaUrl(storageKey),
+  keys.map((key, position) => ({
+    ...(isMockListingImage(key) ? {} : { storageKey: key }),
+    url: mediaUrl(key),
     position,
   }));
 const publicWhere = {
@@ -193,8 +193,6 @@ export const listingRepository = {
         throw new AppError("Usuário ou categoria indisponível.");
       const { images, price, ...fields } = parsed;
       const isAccount = category.slug === ACCOUNT_CATEGORY_SLUG;
-      if (["ACTIVE", "PENDING_REVIEW"].includes(status) && images.length === 0)
-        throw new AppError("Adicione pelo menos uma foto para publicar.");
       if (isAccount) {
         assertAccountListingContent(fields);
         if (status === "ACTIVE")
@@ -261,9 +259,9 @@ export const listingRepository = {
         status: from,
         updatedAt,
         ...(to === "ACTIVE"
-          ? { category: { active: true, slug: { not: ACCOUNT_CATEGORY_SLUG } }, images: { some: {} } }
+          ? { category: { active: true, slug: { not: ACCOUNT_CATEGORY_SLUG } } }
           : to === "PENDING_REVIEW"
-            ? { category: { active: true, slug: ACCOUNT_CATEGORY_SLUG }, images: { some: {} } }
+            ? { category: { active: true, slug: ACCOUNT_CATEGORY_SLUG } }
             : {}),
       },
       data: { status: to },

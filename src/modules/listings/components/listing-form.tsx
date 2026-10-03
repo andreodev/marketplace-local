@@ -13,6 +13,8 @@ import {
   mediaUrl,
   MAX_LISTING_IMAGES,
   assertUploadFile,
+  mockListingImages,
+  mockListingImageKey,
 } from "../utils/media-policy";
 
 type InitialListing = {
@@ -90,6 +92,10 @@ export function ListingForm({
       busy.current = false;
       setUploading(false);
     }
+  }
+  async function selectMock(name: string) {
+    if (busy.current || images.length >= MAX_LISTING_IMAGES) return;
+    setImages((previous) => [...previous, mockListingImageKey(name)]);
   }
   const field = (name: keyof typeof values) => ({
     id: name,
@@ -234,6 +240,29 @@ export function ListingForm({
           Até 8 fotos, com até 3 MB cada. JPEG, PNG ou WebP. A primeira será a
           capa.
         </p>
+        <div>
+          <p className="mb-2 text-sm font-medium">Ou escolha uma imagem de exemplo</p>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {mockListingImages.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => selectMock(name)}
+                disabled={images.length >= MAX_LISTING_IMAGES}
+                className="relative aspect-square overflow-hidden rounded-lg border focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50"
+                aria-label={`Selecionar imagem de exemplo: ${name}`}
+              >
+                <Image
+                  src={`/demo-listings/${name}.jpg`}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="120px"
+                />
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {images.map((key, index) => (
             <div key={key} className="overflow-hidden rounded-xl border">

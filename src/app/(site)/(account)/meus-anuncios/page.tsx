@@ -102,8 +102,6 @@ export default async function MyListings({
               {listing.status === "ACTIVE" && (!listing.featuredUntil || listing.featuredUntil <= new Date()) && (
                 <form action={startPromotionAction} className="mt-3">
                   <input type="hidden" name="listingId" value={listing.id} />
-                  <label className="mb-2 block text-xs font-medium" htmlFor={`cpf-${listing.id}`}>CPF do pagador para o Pix</label>
-                  <input id={`cpf-${listing.id}`} name="cpf" inputMode="numeric" pattern="[0-9]{11}" maxLength={11} required placeholder="Somente 11 números" autoComplete="off" className="mb-2 block h-9 w-48 rounded-md border bg-background px-3 text-sm" />
                   <Button type="submit" variant="outline" size="sm">Destacar por R$ 19,90 / 7 dias</Button>
                 </form>
               )}

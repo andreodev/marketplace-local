@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 
 export type MercadoPagoPayment = {
-  id: number;
+  id: string | number;
   status: string;
   external_reference: string;
   transaction_amount: number;
@@ -13,8 +13,7 @@ export type MercadoPagoPayment = {
 
 export async function applyPayment(payment: MercadoPagoPayment) {
   const order = await db.listingPromotion.findUnique({ where: { id: payment.external_reference } });
-  if (!order || String(payment.id) !== order.providerPaymentId ||
-    payment.payment_method_id !== "pix" || payment.transaction_amount !== order.amountCents / 100) return;
+  if (!order || String(payment.id) !== order.providerPaymentId || payment.payment_method_id !== "pix" || payment.transaction_amount !== order.amountCents / 100) return;
   if (payment.status === "refunded" || payment.status === "charged_back") {
     await db.$transaction(async (tx) => {
       const result = await tx.listingPromotion.updateMany({ where: { id: order.id, status: "PAID" }, data: { status: "REVERSED" } });

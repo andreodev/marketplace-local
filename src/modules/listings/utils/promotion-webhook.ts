@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export function validMercadoPagoSignature(signature: string | null, requestId: string | null, dataId: string | null, secret: string | undefined, now = Date.now()) {
-  if (!secret || !signature || !requestId || !dataId || !/^\d+$/.test(dataId)) return false;
+  if (!secret || !signature || !requestId || !dataId) return false;
   const fields = Object.fromEntries(signature.split(",").map((part) => part.trim().split("=")));
   if (!fields.ts || !fields.v1 || !/^[a-f0-9]{64}$/i.test(fields.v1)) return false;
   const timestamp = Number(fields.ts);

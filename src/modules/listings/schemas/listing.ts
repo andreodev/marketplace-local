@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mediaKeyPattern, MAX_LISTING_IMAGES } from "../utils/media-policy";
+import { isMockListingImage, mediaKeyPattern, MAX_LISTING_IMAGES } from "../utils/media-policy";
 import { accountTypes } from "../utils/account-policy";
 
 export const states = [
@@ -61,7 +61,7 @@ export const listingSchema = z
     accountPolicyUrl: z.string().trim().max(500).default(""),
     accountTransferConfirmed: z.boolean().default(false),
     images: z
-      .array(z.string().regex(mediaKeyPattern, "Foto inválida."))
+      .array(z.string().refine((key) => mediaKeyPattern.test(key) || isMockListingImage(key), "Foto inválida."))
       .max(MAX_LISTING_IMAGES)
       .refine(
         (keys) => new Set(keys).size === keys.length,

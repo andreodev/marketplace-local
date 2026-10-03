@@ -31,7 +31,7 @@ export async function reviewAccountListing(input: unknown) {
       accountPolicyUrl: listing.accountPolicyUrl ?? "",
       accountTransferConfirmed: listing.accountTransferConfirmed,
     });
-    if (!listing.images.length || listing.images.some((image) => !image.storageKey))
+    if (listing.images.some((image) => !image.storageKey))
       throw new AppError("O anúncio precisa de fotos válidas para ser aprovado.");
     for (const image of listing.images) {
       if (!image.storageKey || !(await mediaExists(image.storageKey)))

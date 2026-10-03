@@ -16,7 +16,7 @@ import {
   assertListingOwner,
   assertStatusTransition,
 } from "../utils/listing-policy";
-import { assertMediaKey } from "../utils/media-policy";
+import { assertMediaKey, isMockListingImage, mockListingImageKeyFromUrl } from "../utils/media-policy";
 import {
   ACCOUNT_CATEGORY_SLUG,
   assertAccountListingContent,
@@ -49,11 +49,10 @@ export async function saveListing(input: unknown) {
   const status = isAccount
     ? intent === "DRAFT" ? "DRAFT" : "PENDING_REVIEW"
     : requestedStatus === "PENDING_REVIEW" ? "DRAFT" : requestedStatus;
-  if (["ACTIVE", "PENDING_REVIEW"].includes(status) && data.images.length === 0)
-    throw new AppError("Adicione pelo menos uma foto para publicar.");
   if (existing && existing.status !== status)
     assertStatusTransition(existing.status, status);
   for (const key of data.images) {
+    if (isMockListingImage(key)) continue;
     assertMediaKey(key, user.id);
     if (!(await mediaExists(key)))
       throw new AppError("Uma foto não foi encontrada. Envie novamente.");
@@ -94,8 +93,6 @@ export async function changeListingStatus(input: unknown) {
   if (listing.updatedAt.toISOString() !== data.updatedAt)
     throw new AppError("O anúncio foi alterado. Recarregue a página.");
   if (status === "ACTIVE" || status === "PENDING_REVIEW") {
-    if (listing.images.length === 0)
-      throw new AppError("Adicione pelo menos uma foto para publicar.");
     listingSchema.parse({
       title: listing.title,
       description: listing.description,
@@ -109,7 +106,9 @@ export async function changeListingStatus(input: unknown) {
       accountType: listing.accountType ?? "",
       accountPolicyUrl: listing.accountPolicyUrl ?? "",
       accountTransferConfirmed: listing.accountTransferConfirmed,
-      images: listing.images.map((image) => image.storageKey),
+      images: listing.images.flatMap((image) =>
+        image.storageKey ? [image.storageKey] : mockListingImageKeyFromUrl(image.url) ? [mockListingImageKeyFromUrl(image.url)] : [],
+      ),
     });
     if (status === "PENDING_REVIEW") {
       assertAccountListingReady({
@@ -122,6 +121,7 @@ export async function changeListingStatus(input: unknown) {
       });
     }
     for (const image of listing.images) {
+      if (mockListingImageKeyFromUrl(image.url)) continue;
       if (!image.storageKey || !(await mediaExists(image.storageKey)))
         throw new AppError(
           "Uma foto não foi encontrada. Edite o anúncio e envie novamente.",

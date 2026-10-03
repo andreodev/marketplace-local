@@ -185,8 +185,8 @@ Referências oficiais consultadas: [Auth.js](https://authjs.dev), [Prisma config
 
 ## Destaque pago por anúncio
 
-- O vendedor pode destacar um anúncio ativo em `/meus-anuncios` por R$ 19,90 durante 7 dias. O formulário pede CPF do pagador apenas para gerar o Pix; o documento não é salvo no banco local.
-- Configure `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` no ambiente. Cadastre no painel do Mercado Pago o evento `payment` para `https://SEU-DOMINIO/api/webhooks/mercado-pago`. Sem essas credenciais a cobrança não funciona.
+- O vendedor pode destacar um anúncio ativo em `/meus-anuncios` por R$ 19,90 durante 7 dias via QR Pix estático do caixa configurado.
+- Configure `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` no ambiente. Cadastre no painel do Mercado Pago o evento `Order (Mercado Pago)` para `https://SEU-DOMINIO/api/webhooks/mercado-pago`. Sem essas credenciais a cobrança não funciona.
 - O QR Code e o Pix Copia e Cola aparecem na página do pedido. A confirmação vem pelo webhook assinado ou pela consulta autenticada ao Mercado Pago quando o vendedor atualiza a página. A aplicação confere ID, referência, valor e forma de pagamento antes de ativar o destaque.
 - Anúncios com destaque vigente aparecem antes dos demais na vitrine e na lista de busca, com selo visual. A prioridade termina automaticamente ao vencer `featuredUntil`. Um anúncio pausado, removido ou ainda em revisão continua oculto.
-- Teste com credenciais de teste e webhook público antes de usar dinheiro real. A integração usa a [API Pix](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-payments/integration-configuration/integrate-pix) e a [validação de Webhooks](https://www.mercadopago.com.br/developers/pt/docs/subscriptions/additional-content/your-integrations/notifications/webhooks) do Mercado Pago.
+- Teste com credenciais de teste e webhook público antes de usar dinheiro real. A integração usa a [API Orders Pix](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/payment-integration/websites/pix) e a [validação de Webhooks](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/notifications) do Mercado Pago.
